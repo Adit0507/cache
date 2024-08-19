@@ -18,3 +18,15 @@ func (c *Cache[K, V])  Read(key K) (V, bool) {
 
 	return v, found
 }
+
+// overrides the value for current key
+func (c *Cache[K, V]) Upsert(key K, value V) error {
+	c.data[key] = value
+
+	return nil
+}
+
+// deleting key
+func (c *Cache[K, V]) Delete(key K) {
+	delete(c.data, key)
+}
