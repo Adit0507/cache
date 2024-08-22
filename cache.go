@@ -1,8 +1,20 @@
 package main
 
+import (
+	"sync"
+	"time"
+)
+
 // key-value storage
 type Cache[K comparable, V any] struct {
+	mu sync.Mutex
 	data map[K]V
+}
+
+// ttl
+type entryWithTimeout[V any] struct {
+	value V
+	expires time.Time	// after this time, the value is useless
 }
 
 // creating a cache
