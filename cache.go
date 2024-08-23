@@ -1,4 +1,4 @@
-package main
+package cache
 
 import (
 	"sync"
@@ -7,33 +7,57 @@ import (
 
 // key-value storage
 type Cache[K comparable, V any] struct {
-	mu sync.Mutex
-	data map[K]V
+	mu   sync.Mutex
+	data map[K]entryWithTimeout[V]	
+	ttl time.Duration
 }
 
-// ttl
+// adding expiration date
 type entryWithTimeout[V any] struct {
-	value V
-	expires time.Time	// after this time, the value is useless
+	value   V
+	expires time.Time // after this time, the value is useless
 }
 
 // creating a cache
-func New[K comparable, V any]() Cache[K, V] {
+func New[K comparable, V any](ttl time.Duration) Cache[K, V] {
 	return Cache[K, V]{
-		data: make(map[K]V),
+		data: make(map[K]entryWithTimeout[V]),
+		ttl:  ttl,
 	}
 }
 
 // readingfrom cache
-func (c *Cache[K, V])  Read(key K) (V, bool) {
-	v, found := c.data[key]
+func (c *Cache[K, V]) Read(key K) (V, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
-	return v, found
+	var zeroV V
+	e, ok := c.data[key]
+
+	switch {
+	case !ok:
+		return zeroV, false
+				
+	case e.expires.Before(time.Now()):
+		// since the Read() method is now altering the content
+		// we cant use RWMutex  
+		delete(c.data, key)
+		return zeroV, false
+
+	default:
+		return e.value, true
+	}
 }
 
 // overrides the value for current key
 func (c *Cache[K, V]) Upsert(key K, value V) error {
-	c.data[key] = value
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.data[key] = entryWithTimeout[V]{
+		value:   value,
+		expires: time.Now().Add(c.ttl),
+	}
 
 	return nil
 }
